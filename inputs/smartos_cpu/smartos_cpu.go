@@ -1,8 +1,6 @@
 package smartos_cpu
 
 import (
-	"log"
-
 	"github.com/influxdata/telegraf"
 	"github.com/influxdata/telegraf/plugins/inputs"
 
@@ -11,8 +9,10 @@ import (
 )
 
 type SmartOSCPU struct {
-	Global      bool
-	UUIDToAlias bool
+	Global   bool
+	TagAlias bool
+
+	last map[string]map[string]uint64
 }
 
 func (s *SmartOSCPU) Description() string {
@@ -21,35 +21,54 @@ func (s *SmartOSCPU) Description() string {
 
 func (s *SmartOSCPU) SampleConfig() string {
 	return `
-  ## Collect global zone CPU stats?
-  global = true
-
-  ## Translate UUIDs into zone aliases?
-  uuid_to_alias = true
+  ## Tag metrics with zone alias?
+  tag_alias = false
 `
 }
 
 func (s *SmartOSCPU) Gather(acc telegraf.Accumulator) error {
 	token, err := kstat.Open()
 	if err != nil {
-		log.Fatal("cannot get kstat token")
 		return err
 	}
 
-	stats, _ := token.Lookup("zones", -1, "3ff6c31f-8863-6805-dc0d-d35adf")
-	name, val := helpers.ReadStat(stats, "nsec_user")
+	defer token.Close()
+	stats := token.All()
 
-	acc.AddFields("cpu.nsec_user", map[string]interface{}{
-		name: val
-	}, map[string]string {
-		"zone": "3ff6c31f-8863-6805-dc0d-d35adf"
-	})
+	// Idle CPU will be the same across all zones
+	idle := helpers.SumUint(stats, "cpu", -1, "sys", "cpu_nsec_idle") - s.last["global"]["idle"]
 
-	token.Close()
+	for _, zone_sample := range helpers.FilterStats(stats, "zones", -1, "") {
+		zone_name := helpers.ReadString(zone_sample, "zonename")
+
+		metrics := map[string]uint64{
+			"nsec_idle": idle,
+		}
+		fields := map[string]interface{}{
+			"nsec_idle": idle - s.last[zone_name]["nsec_idle"],
+		}
+
+		for _, field := range []string{"nsec_user", "nsec_sys", "nsec_waitrq"} {
+			val := helpers.ReadUint(zone_sample, field)
+			metrics[field] = val
+			fields[field] = val - s.last[zone_name][field]
+		}
+
+		acc.AddFields("cpu", fields, map[string]string{
+			"zone": zone_name,
+		})
+
+		if s.last == nil {
+			s.last = map[string]map[string]uint64{}
+		}
+
+		s.last[zone_name] = metrics
+
+	}
 
 	return nil
 }
 
 func init() {
-	inputs.Add("SmartOSCPU", func() telegraf.Input { return &SmartOSCPU{} })
+	inputs.Add("smartos_cpu", func() telegraf.Input { return &SmartOSCPU{} })
 }
