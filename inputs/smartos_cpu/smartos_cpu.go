@@ -58,10 +58,6 @@ func (s *SmartOSCPU) Gather(acc telegraf.Accumulator) error {
 			"zone": zone_name,
 		})
 
-		if s.last == nil {
-			s.last = map[string]map[string]uint64{}
-		}
-
 		s.last[zone_name] = metrics
 
 	}
@@ -70,5 +66,5 @@ func (s *SmartOSCPU) Gather(acc telegraf.Accumulator) error {
 }
 
 func init() {
-	inputs.Add("smartos_cpu", func() telegraf.Input { return &SmartOSCPU{} })
+	inputs.Add("smartos_cpu", func() telegraf.Input { return &SmartOSCPU{last: map[string]map[string]uint64{}} })
 }
