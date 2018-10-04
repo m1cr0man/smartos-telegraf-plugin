@@ -64,8 +64,8 @@ func (s *SmartOSRAM) Gather(acc telegraf.Accumulator) error {
 	// Fault types: Major, Copy on write, Kernel anon, Protection fault, !(cow|prot) AKA anon
 	for _, field := range []string{"maj_fault", "cow_fault", "kernel_asflt", "prot_fault", "as_fault"} {
 		val := helpers.SumUint(vmstats, "", -1, "", field)
-		globalFields[field] = val - s.last["as_fault"]
-		s.last["as_fault"] = val
+		globalFields[field] = val - s.last[field]
+		s.last[field] = val
 	}
 
 	for _, zone_sample := range helpers.FilterStats(stats, "memory_cap", -1, "") {
