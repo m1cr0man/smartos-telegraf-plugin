@@ -35,31 +35,43 @@ func (s *SmartOSCPU) Gather(acc telegraf.Accumulator) error {
 	defer token.Close()
 	stats := token.All()
 
-	// Idle CPU will be the same across all zones
-	idle := helpers.SumUint(stats, "cpu", -1, "sys", "cpu_nsec_idle") - s.last["global"]["idle"]
+	// Note: Idle CPU in global zone accounts for all idle CPU
 
-	for _, zone_sample := range helpers.FilterStats(stats, "zones", -1, "") {
-		zone_name := helpers.ReadString(zone_sample, "zonename")
+	globalMetrics := map[string]uint64{}
+	globalFields := map[string]interface{}{"cpu_nsec_total": 0}
+	var total uint64
 
-		metrics := map[string]uint64{
-			"nsec_idle": idle,
-		}
-		fields := map[string]interface{}{
-			"nsec_idle": idle - s.last[zone_name]["nsec_idle"],
+	cpuSamples := helpers.FilterStats(stats, "cpu", -1, "sys")
+	for _, field := range []string{"cpu_nsec_idle", "cpu_nsec_intr", "cpu_nsec_kernel", "cpu_nsec_user"} {
+		val := helpers.SumUint(cpuSamples, "cpu", -1, "sys", field)
+		globalMetrics[field] = val
+		globalFields[field] = val - s.last["global"][field]
+		total += val - s.last["global"][field]
+	}
+	globalFields["cpu_nsec_total"] = total
+
+	for _, zoneSample := range helpers.FilterStats(stats, "zones", -1, "") {
+		zoneName := helpers.ReadString(zoneSample, "zonename")
+
+		metrics := map[string]uint64{}
+		fields := map[string]interface{}{}
+
+		if zoneName == "global" {
+			metrics = globalMetrics
+			fields = globalFields
 		}
 
 		for _, field := range []string{"nsec_user", "nsec_sys", "nsec_waitrq"} {
-			val := helpers.ReadUint(zone_sample, field)
+			val := helpers.ReadUint(zoneSample, field)
 			metrics[field] = val
-			fields[field] = val - s.last[zone_name][field]
+			fields[field] = val - s.last[zoneName][field]
 		}
 
 		acc.AddFields("cpu", fields, map[string]string{
-			"zone": zone_name,
+			"zone": zoneName,
 		})
 
-		s.last[zone_name] = metrics
-
+		s.last[zoneName] = metrics
 	}
 
 	return nil
