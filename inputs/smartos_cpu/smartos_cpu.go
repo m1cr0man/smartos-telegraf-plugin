@@ -54,7 +54,7 @@ func (s *SmartOSCPU) Gather(acc telegraf.Accumulator) error {
 		zoneName := helpers.ReadString(zoneSample, "zonename")
 
 		metrics := map[string]uint64{}
-		fields := map[string]interface{}{}
+		fields := map[string]interface{}{"cpu_nsec_total": total}
 
 		if zoneName == "global" {
 			metrics = globalMetrics
