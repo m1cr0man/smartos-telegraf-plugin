@@ -65,7 +65,8 @@ func (s *SmartOSRAM) Gather(acc telegraf.Accumulator) error {
 		// Zone overcommit scan activity
 		"zone_cap_scan": helpers.ReadUint(pagestats, "zone_cap_scan"),
 		// ARC size
-		"arcsize": helpers.ReadUint(arcstats, "size"),
+		"arcsize":            helpers.ReadUint(arcstats, "size"),
+		"arcsize_compressed": helpers.ReadUint(arcstats, "compressed_size"),
 	}
 
 	// Get diff for fault metrics
