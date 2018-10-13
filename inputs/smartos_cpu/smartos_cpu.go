@@ -42,7 +42,7 @@ func (s *SmartOSCPU) Gather(acc telegraf.Accumulator) error {
 	var total uint64
 
 	cpuSamples := helpers.FilterStats(stats, "cpu", -1, "sys")
-	for _, field := range []string{"cpu_nsec_idle", "cpu_nsec_intr", "cpu_nsec_kernel", "cpu_nsec_user"} {
+	for _, field := range []string{"cpu_nsec_idle", "cpu_nsec_kernel", "cpu_nsec_user"} {
 		val := helpers.SumUint(cpuSamples, "cpu", -1, "sys", field)
 		globalMetrics[field] = val
 		globalFields[field] = val - s.last["global"][field]
@@ -61,10 +61,11 @@ func (s *SmartOSCPU) Gather(acc telegraf.Accumulator) error {
 			fields = globalFields
 		}
 
-		for _, field := range []string{"nsec_user", "nsec_sys", "nsec_waitrq"} {
+		// nsec_waitrq is run queue wait time total, not time spent waiting for IO
+		for _, field := range []string{"nsec_user", "nsec_sys"} {
 			val := helpers.ReadUint(zoneSample, field)
 			metrics[field] = val
-			fields[field] = val - s.last[zoneName][field]
+			fields["zone_"+field] = val - s.last[zoneName][field]
 		}
 
 		acc.AddFields("cpu", fields, map[string]string{
